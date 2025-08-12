@@ -1,0 +1,22 @@
+﻿@using AntDesign
+
+@code {
+    [Parameter] public List<string> Headers { get; set; }
+    [Parameter] public List<List<string>> Rows { get; set; }
+}
+
+@* <Table TItem="List<string>" DataSource="Rows" Bordered="true">
+    <HeaderTemplate>
+        @foreach (var header in Headers)
+        {
+            <TableColumn TItem="List<string>" Title="@header" />
+        }
+    </HeaderTemplate>
+    <RowTemplate>
+        @for (int i = 0; i < Headers.Count; i++)
+        {
+            <TableCell>@(i < row.Count ? row[i] : "")</TableCell>
+        }
+    </RowTemplate>
+</Table>
+ *@

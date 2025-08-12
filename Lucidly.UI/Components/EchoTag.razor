@@ -1,0 +1,45 @@
+﻿@using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Components
+
+@code {
+    [Parameter]
+    public MarkupString Text { get; set; }
+
+    private MarkupString RenderedMarkup => BuildMarkup();
+
+    private readonly Dictionary<string, string> _tagColors = new()
+    {
+        ["@echo"] = "#108ee9",
+        ["@warn"] = "#faad14",
+        ["@info"] = "#1890ff",
+        ["@error"] = "#f5222d"
+    };
+
+    private MarkupString BuildMarkup()
+    {
+        var input = Text.Value;
+        if (string.IsNullOrWhiteSpace(input))
+            return new MarkupString("");
+
+        var matches = Regex.Matches(input, @"(@\w+)(?:\s+([^@]+))?");
+        var html = new System.Text.StringBuilder();
+
+        if (matches.Count == 0)
+			return new MarkupString(input); // No tags found, return original text
+
+        foreach (Match match in matches)
+        {
+            if (match.Groups.Count >= 3)
+            {
+                var tag = match.Groups[1].Value.Trim();
+                var value = match.Groups[2].Value.Trim();
+                var color = _tagColors.TryGetValue(tag, out var c) ? c : "#d6e2e9";
+
+                html.Append(@$"<span class='ant-tag ant-tag-has-color' style='background-color: {color};color: #262424;'> {tag}</span> {value}");
+            }
+        }
+
+        return new MarkupString(html.ToString());
+    }
+}
+@RenderedMarkup

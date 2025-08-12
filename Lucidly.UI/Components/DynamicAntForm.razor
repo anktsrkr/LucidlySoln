@@ -1,0 +1,84 @@
+﻿@using AntDesign
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using Lucidly.Common
+
+@if (Schema is not null)
+{
+    <Form Model="@formModel" 
+        Layout="FormLayout.Vertical" 
+        Style="border: 2px solid #40a9ff; border-radius: 6px; padding: 15px; margin-top: 10px;width:25vw"
+    OnFinish="OnValidSubmit">
+        @foreach (var prop in SchemaData)
+        {
+            <FormItem Name="@prop.Key" Label="@(!string.IsNullOrEmpty(prop.Value.Title) ? prop.Value.Title : prop.Key)"
+                      Help="@prop.Value.Description">
+                @if (prop.Value.Type?.ToLower() == "string")
+                {
+                    <Input TValue="string" />
+                }
+                else if (prop.Value.Type?.ToLower() == "number")
+                {
+                    <AntDesign.InputNumber TValue="int" Style="width:100%" />
+                }
+                else if (prop.Value.Type?.ToLower() == "boolean")
+                {
+                    <Switch/>
+                }
+                else
+                {
+                    var enumPropertySchema = prop.Value as EnumPropertySchema;
+
+                    <Select
+                            TItem="string"
+                            TItemValue="string" DefaultActiveFirstOption>
+
+                        @for (int i = 0; i < enumPropertySchema.EnumNames.Count; i++)
+                        {
+                            var enumName = enumPropertySchema.EnumNames[i];
+                            var enumValue = enumPropertySchema.Enum[i];
+                            <SelectOption Value="@enumValue" Label="@enumName"/>
+                        }
+                       
+                    </Select>
+                }
+            </FormItem>
+        }
+
+            <Button Type="ButtonType.Primary" HtmlType="submit">
+                Procced
+            </Button>
+            <Button Type="ButtonType.Primary" HtmlType="submit">
+                Cancel
+            </Button>
+    </Form>
+}
+
+@code {
+    [Parameter] public Dictionary<string, PropertySchema> SchemaData { get; set; } = new();
+    [Parameter] public EventCallback<Dictionary<string, object>> OnSubmit { get; set; }
+
+    private Dictionary<string, PropertySchema> Schema { get; set; } = new();
+    private Dictionary<string, object> formModel = new();
+
+    protected override void OnInitialized()
+    {
+        foreach (var schemaProp in SchemaData)
+        {
+           
+            formModel[schemaProp.Key] = schemaProp.Value.Type.ToLower() switch
+            {
+                "string" => "",
+                "number" => 0,
+                "boolean" => false,
+                _ => ""
+            };
+        }
+    }
+
+    private async Task OnValidSubmit()
+    {
+        await OnSubmit.InvokeAsync(formModel);
+    }
+
+}

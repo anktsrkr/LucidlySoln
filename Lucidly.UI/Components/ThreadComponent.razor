@@ -1,0 +1,61 @@
+﻿<Menu Theme="MenuTheme.Dark" Mode="MenuMode.Inline" DefaultSelectedKeys=@(new[] { "5" })>
+    <SubMenu Key="1" IsOpen=true>
+        <TitleTemplate>
+            <Icon Type="@IconType.Outline.Wechat" />
+            <span class="nav-text">Threads</span>
+        </TitleTemplate>
+        <ChildContent>
+            <!-- New Thread Option -->
+            <MenuItem Key="new-thread" OnClick="AddNewThread">
+                <Icon Type="@IconType.Outline.Plus" />
+                <span>New Thread</span>
+            </MenuItem>
+            <!-- Dynamically generated threads -->
+            @if (threads != null)
+            {
+                @foreach (var thread in threads)
+                {
+                    <MenuItem Key="@thread.Id">@thread.Name</MenuItem>
+                }
+            }
+        </ChildContent>
+    </SubMenu>
+    <MenuItem Key="2">
+        <Icon Type="@IconType.Outline.Setting" />
+        <span class="nav-text">Settings</span>
+    </MenuItem>
+</Menu>
+@code {
+    private List<ThreadItem> threads = new List<ThreadItem>();
+    private int nextThreadId = 6; // Start from 6 since 5 is already used
+
+    protected override void OnInitialized()
+    {
+        // Initialize with some sample threads (optional)
+        threads.Add(new ThreadItem { Id = "6", Name = "Project Discussion" });
+        threads.Add(new ThreadItem { Id = "7", Name = "Bug Reports" });
+    }
+
+    private void AddNewThread()
+    {
+        var newThread = new ThreadItem
+        {
+            Id = nextThreadId.ToString(),
+            Name = $"Thread {nextThreadId}"
+        };
+
+        threads.Add(newThread);
+        nextThreadId++;
+
+        // Optionally select the new thread
+        // You would need to update the menu's SelectedKeys here
+
+        StateHasChanged();
+    }
+
+    public class ThreadItem
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+    }
+}

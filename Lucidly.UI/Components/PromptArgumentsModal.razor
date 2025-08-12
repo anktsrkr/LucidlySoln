@@ -1,0 +1,214 @@
+﻿@using Lucidly.UI.Utils
+@using Magic.IndexedDb
+@using Microsoft.AspNetCore.DataProtection
+@using ModelContextProtocol.Client
+@using ModelContextProtocol.Protocol
+@using System.Text.Json
+@using static Lucidly.UI.Components.Pages.Home
+
+<Modal Title="Prompt Argument(s)"
+       Visible="@Visible"
+       MaskClosable="false"
+	   OnOk="HandleOk"
+       OnCancel="HandleCancel" 
+       ConfirmLoading="@ConfirmLoading"
+       Style="max-height: 80vh; overflow-y: auto;">
+        @if (Prompt != null && Prompt.Arguments!=null)
+        {   
+            <Form Model="@formModel" 
+                Layout="FormLayout.Vertical"
+                    LabelColSpan="24"
+                    WrapperColSpan="24"
+                    OnFinish="OnFinish"
+                    OnFinishFailed="OnFinishFailed"
+                    @ref="@_form">
+                    @foreach (var prop in Prompt.Arguments)
+                    {
+                        <FormItem Name="@prop.Name" Label="@(prop.Name)"
+                                    Help="@prop.Description" Required="@(prop.Required??false)">
+                                    <Select Id="@prop.Name"
+                                            DataSource="@itemsByProp.GetValueOrDefault(prop.Name, new())"
+                                            EnableSearch
+                                            AutoClearSearchValue = "false"
+                                            ValueName="@nameof(Item.Value)"
+                                            LabelName="@nameof(Item.Label)"
+                                            TItemValue="string"
+                                            TItem="Item"
+                                            Placeholder="input search text"
+                                            ShowArrowIcon="false"
+                                            ShowSearchIcon="true"
+                                            SearchDebounceMilliseconds="350"
+                                            Loading="@loadingProps.Contains(prop.Name)"
+                                            Value="@(formModel[prop.Name]?.ToString())"
+                                            ValueChanged="@(value => OnSelectedItemChanged(prop.Name, value))"
+                                            OnSearch="@(value => SearchItems(prop.Name, value))">
+                                        <PrefixIcon>
+                                            <Icon Type="@IconType.Outline.Search" />
+                                        </PrefixIcon>
+                                    </Select>
+                </FormItem>
+            }
+
+            </Form>
+        }
+</Modal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public Guid ServerId { get; set; }
+    [Parameter] public bool ConfirmLoading { get; set; }
+
+    [Parameter] public Prompt? Prompt { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    [Parameter] public List<Item> Items { get; set; } = new();
+    [Parameter] public string SelectedValue { get; set; }
+    [Parameter] public EventCallback<string> SelectedValueChanged { get; set; }
+    [Parameter] public EventCallback<PromptWithData> OnSubmit { get; set; }
+
+
+    [Inject] public IMagicIndexedDb MagicDb { get; set; }
+    [Inject] public IJSRuntime JS { get; set; }
+    [Inject] IDataProtectionProvider DataProtectionProvider { get; set; }
+
+    private Form<Dictionary<string, object>> _form;
+    private bool IsLoading = false;
+    private ValueTask<CompleteResult> _oldTask;
+    private Dictionary<string, object> formModel = new();
+    private McpServer? protectedMcpServer;
+    private Dictionary<string, List<Item>> itemsByProp = new();
+    private HashSet<string> loadingProps = new();
+
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Visible)
+        {
+            @if (Prompt != null && Prompt.Arguments != null)
+            {
+                foreach (var schemaProp in Prompt.Arguments)
+                {
+                    formModel[schemaProp.Name] = "";
+                }
+            }
+        }
+        if (ServerId != default)
+        {
+            var db = await MagicDb.Query<ProtectedMcpServer>();
+            var serverFromDB =  await db.FirstOrDefaultAsync(x => x.UniqueGuid == ServerId);
+            var protector = DataProtectionProvider.CreateProtector("mcpservers");
+
+            if (serverFromDB != null)
+            {
+                protectedMcpServer =  JsonSerializer.Deserialize<McpServer>(protector.Unprotect(serverFromDB.Value));
+            }
+            else
+            {
+                protectedMcpServer = null;
+            }
+        }
+    }
+    private void OnSelectedItemChanged(string propName, string value)
+    {
+        formModel[propName] = value;
+        StateHasChanged();
+    }
+    private async Task SearchItems(string prop, string value)
+    {
+        if (Prompt?.Arguments == null || protectedMcpServer == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            itemsByProp[prop] = new();
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        loadingProps.Add(prop);
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            if (_oldTask.IsCompleted)
+            {
+                var mcpClient = await McpClientFactory.CreateAsync(
+                    new SseClientTransport(new SseClientTransportOptions
+                    {
+                        Endpoint = new(protectedMcpServer.Uri),
+                        AdditionalHeaders = new Dictionary<string, string>
+                        {
+                            ["Authorization"] = $"Bearer {protectedMcpServer.TokenContainer.AccessToken!}"
+                        },
+                        TransportMode = HttpTransportMode.StreamableHttp
+                    }));
+
+                _oldTask = mcpClient.CompleteAsync(new PromptReference { Name = Prompt.Name }, prop, value);
+                var result = await _oldTask;
+
+                itemsByProp[prop] = result.Completion.Values
+                    .Select(item => new Item { Value = item, Label = item })
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            var item = new List<Item> ();
+            // Add if not exists
+            item.Add(new Item { Label = value, Value = value });
+
+            itemsByProp[prop] = item;
+        }
+
+        loadingProps.Remove(prop);
+        await InvokeAsync(StateHasChanged);
+    }
+
+
+
+    public class Item
+    {
+        public string Value { get; set; }
+        public string Label { get; set; }
+
+        public Item() { }
+
+        public Item(string value, string label)
+        {
+            Value = value;
+            Label = label;
+        }
+
+        public override string ToString() => Label;
+    }
+    private async Task OnFinish(EditContext editContext)
+    {
+        if (OnSubmit.HasDelegate)
+        {
+            await OnSubmit.InvokeAsync(new PromptWithData(Prompt.Name,(Dictionary<string,object>)editContext.Model));
+        }
+
+    }
+
+    private void OnFinishFailed(EditContext editContext)
+    {
+    }
+
+    private async Task HandleOk(MouseEventArgs e)
+    {
+		ConfirmLoading = true;
+        if (!_form.Validate())
+        {
+            ConfirmLoading = false;
+			return;
+        }
+        await Task.Delay(1000);
+        _form.Submit();
+        ConfirmLoading = false; 
+        await VisibleChanged.InvokeAsync(false);
+    }
+
+    private void HandleCancel(MouseEventArgs e)
+    {
+		VisibleChanged.InvokeAsync(false);
+    }
+}

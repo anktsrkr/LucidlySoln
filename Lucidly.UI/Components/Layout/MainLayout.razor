@@ -1,0 +1,269 @@
+﻿@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inherits LayoutComponentBase
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@using AntDesign
+@inject NavigationManager NavigationManager
+<Layout>
+    @if (!collapsed)
+    {
+        <Sider Width="240" Style="height:100vh">
+            <div style="height: 100%; display: flex; flex-direction: column;">
+                <!-- Logo -->
+                <Space>
+                    <SpaceItem>
+                        <Image Src="images/logo.svg" Alt="logo" Width="140" Preview="false" Class="logo" />
+                    </SpaceItem>
+                    <SpaceItem Style="margin: 10px 0 0 35px;">
+                        <Button Type="ButtonType.Primary"
+                                OnClick="ToggleCollapse"
+                                Shape="ButtonShape.Circle"
+                                Icon="@IconType.Outline.MenuFold" />
+                    </SpaceItem>
+                </Space>
+                <!-- Add New Thread Button -->
+                <div style="margin: 16px 0 16px 0; display: flex;  align-items: center; flex-direction: column;">
+                    <Button Type="ButtonType.Primary" Shape="ButtonShape.Round"
+                            Icon="plus" OnClick="AddNewThread">
+                        Add New Thread
+                    </Button>
+                </div>
+
+                <!-- Container for Threads and User Profile -->
+                <!-- This container will manage the remaining space -->
+                <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+                    <!-- Collapsible All Threads Section -->
+                    <!-- This now flexes to fill available space -->
+                    <div style="margin-bottom: 16px; display: flex; flex-direction: column; flex: 1; min-height: 0;">
+                        <div style="display: flex; align-items: center; cursor: pointer; padding: 8px 0;"
+                             @onclick="ToggleThreadsCollapse">
+                            <Icon Type="@(threadsCollapsed ? "right" : "down")"
+                                  Style="margin-right: 8px; font-size: 12px; color: white;" />
+                            <span style="color: white; font-size: 14px;">All Threads (@threads.Count)</span>
+                        </div>
+                        @if (!threadsCollapsed)
+                        {
+                            <!-- Scrollable Thread List Container -->
+                            <!-- flex: 1 makes this take remaining space within its parent -->
+                            <div style="margin-top: 8px; flex: 1; min-height: 0; display: flex; flex-direction: column;">
+                                @if (threads.Any())
+                                {
+                                    <!-- Actual Scrollable Area -->
+                                    <div style="flex: 1; min-height: 0; overflow-y: auto;scrollbar-width: none; ">
+                                        @foreach (var thread in threads)
+                                        {
+                                            <div style="padding: 4px 0;">
+                                                <div style="display: flex; align-items: center; padding: 4px; border-radius: 4px; cursor: pointer; @(selectedThread?.Id == thread.Id ? "background-color: rgba(255,255,255,0.1);" : "")"
+                                                     @onclick="() => SelectThread(thread)">
+                                                    <Avatar Style="@("margin-right: 8px;background-color:" + GetThreadColor(thread.Name))">
+                                                        @GetInitials(thread.Name)
+                                                    </Avatar>
+                                                    @if (!collapsed)
+                                                    {
+                                                        <span style="color: white; font-size: 13px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                                                              title="@thread.Name">
+                                                            @thread.Name
+                                                        </span>
+                                                        @if (thread.MessageCount > 0)
+                                                        {
+                                                            <span style="color: rgba(255,255,255,0.6); font-size: 11px; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 10px;">
+                                                                @thread.MessageCount
+                                                            </span>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span style="color: rgba(255,255,255,0.6); font-size: 11px;" title="@thread.Name">
+                                                            @GetInitials(thread.Name)
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div style="padding: 8px; text-align: center; color: rgba(255,255,255,0.6); font-size: 12px;">
+                                        No threads available
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @if (!collapsed)
+                    {
+                        <!-- User Profile Dropdown at Bottom -->
+                        <!-- This section will now stay at the bottom -->
+                        <div style="padding: 10px; border-top: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;">
+                            <Dropdown Trigger="new[] { Trigger.Hover }" VisibleChanged="OnDropdownVisibleChange">
+                                <ChildContent>
+                                    <div style="display: flex; align-items: center; cursor: pointer;">
+                                        <Avatar Style="@("margin-right: 8px;background-color:" + GetThreadColor(User.Claims.FirstOrDefault(x => x.Type == "email")?.Value))">
+                                            @(GetInitials(User.Claims.FirstOrDefault(x => x.Type == "email")?.Value[0].ToString().ToUpper()))
+                                        </Avatar>
+                                        <Text Style="width:150px;color: white;text-overflow: ellipsis;white-space: nowrap;overflow: hidden;">
+                                            @(User.Claims.FirstOrDefault(x => x.Type == "email")?.Value)
+                                        </Text>
+                                        <Icon Type="@(dropdownVisible ? "up" : "down")" Style="margin-left: 8px; color: white;font-size: 12px;" />
+                                    </div>
+                                </ChildContent>
+                                <Overlay>
+                                    <Menu Style="width: 225px">
+                                        <MenuItem>
+                                            <Icon Type="user" Theme="IconThemeType.Outline" />
+                                            <span>Profile</span>
+                                        </MenuItem>
+                                        <MenuItem>
+                                            <Icon Type="setting" Theme="IconThemeType.Outline" />
+                                            <span>Account Settings</span>
+                                        </MenuItem>
+                                        <MenuDivider />
+                                        <MenuItem>
+                                            <Icon Type="logout" Theme="IconThemeType.Outline" />
+                                            <span>Logout</span>
+                                        </MenuItem>
+                                    </Menu>
+                                </Overlay>
+                            </Dropdown>
+                        </div>
+                    }
+                </div> <!-- End of main flex container -->
+            </div>
+        </Sider>
+    }
+    <Layout Class="site-layout">
+        <!-- Custom Trigger Button -->
+        <div style="position: absolute;left: @(collapsed ? "10px" : "248px"); z-index: 100;">
+            <Header Class="site-layout-background" Style="padding: 0;">
+                @if (collapsed)
+                {
+                    <Button Type="ButtonType.Primary"
+                            OnClick="ToggleCollapse"
+                            Shape="ButtonShape.Circle"
+                            Icon="@(collapsed ? IconType.Outline.MenuUnfold : IconType.Outline.MenuFold)" />
+                    <Button Type="ButtonType.Primary"
+                            OnClick="ToggleCollapse"
+                            Shape="ButtonShape.Circle"
+                            Icon="@IconType.Outline.Form" />
+                }
+            </Header>
+        </div>
+        <Content>
+            <div class="site-layout-background" style="padding: 24px 24px 0px 24px;height:100vh">
+                <CascadingValue Value="selectedThread">
+                    @Body
+                </CascadingValue>
+            </div>
+        </Content>
+    </Layout>
+</Layout>
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+@code {
+    private ClaimsPrincipal? User { get; set; }
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        User = authState.User;
+
+        // --- New Logic to Select Default Thread ---
+        // Check if there's exactly one thread and none is selected yet
+        if (threads.Count == 1 && selectedThread == null)
+        {
+            selectedThread = threads[0]; // Select the first (and only) thread
+            // Optional: Trigger StateHasChanged if needed for immediate UI update
+            // StateHasChanged();
+            // Note: StateHasChanged() is generally not needed here as rendering
+            // happens after OnInitializedAsync completes.
+        }
+        // --- End of New Logic ---
+    }
+    private bool dropdownVisible = false;
+    private bool threadsCollapsed = false;
+    private bool collapsed = false;
+    private void OnDropdownVisibleChange(bool visible)
+    {
+        dropdownVisible = visible;
+    }
+    private void ToggleCollapse()
+    {
+        collapsed = !collapsed;
+    }
+    private void AddNewThread()
+    {
+        // Implement your add new thread logic here
+        // Example: Open a modal or navigate to create thread page
+        var newThread = new ThreadModel
+        {
+            Id = Guid.NewGuid(),
+            Name = $"Untitled Thread {threads.Count+1}",
+            MessageCount = 0
+        };
+        threads.Add(newThread);
+        StateHasChanged();
+    }
+    private void ToggleThreadsCollapse()
+    {
+        threadsCollapsed = !threadsCollapsed;
+    }
+    private void SelectThread(int threadId)
+    {
+        // Implement your thread selection logic here
+        Console.WriteLine($"Thread {threadId} selected");
+    }
+    private ThreadModel? selectedThread;
+    // Thread list - you can populate this from your data source
+    private List<ThreadModel> threads = new List<ThreadModel>
+    {
+        new ThreadModel { Id = Guid.CreateVersion7(), Name = "Untitled Thread 1", MessageCount = 0 },
+        // new ThreadModel { Id = 2, Name = "Bug Reports", MessageCount = 7 },
+        // new ThreadModel { Id = 3, Name = "Feature Requests", MessageCount = 12 },
+        // new ThreadModel { Id = 4, Name = "General Chat", MessageCount = 0 },
+        // new ThreadModel { Id = 5, Name = "Urgent Issues", MessageCount = 5 }
+    };
+    private void SelectThread(ThreadModel thread)
+    {
+        selectedThread = thread;
+        // Implement your thread selection logic here
+        Console.WriteLine($"Thread '{thread.Name}' selected");
+        StateHasChanged();
+    }
+    private string GetInitials(string? threadName)
+    {
+        if (string.IsNullOrWhiteSpace(threadName)) return "?";
+        var words = threadName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length >= 2)
+            return $"{words[0][0]}{words[1][0]}".ToUpper();
+        else
+            return threadName.Substring(0, Math.Min(2, threadName.Length)).ToUpper();
+    }
+    private string GetThreadColor(string threadName = "Untitled Thread 1")
+    {
+        // Simple hash-based color generation
+        var hash = threadName.GetHashCode();
+        var colors = new[] { "#1890ff", "#52c41a", "#faad14", "#f5222d", "#722ed1", "#13c2c2" };
+        return colors[Math.Abs(hash) % colors.Length];
+    }
+    // Thread Model Class
+    public class ThreadModel
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int MessageCount { get; set; }
+    }
+}
+<style>
+    .logo {
+        background: #071428;
+        margin: 16px 0px 10px 16px;
+    }
+
+    .site-layout .site-layout-background {
+        background: #fff;
+    }
+</style>
